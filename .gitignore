@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Documentation
+PL Valeur Absolu.pdf
+
 # C extensions
 *.so
 
