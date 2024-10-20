@@ -28,23 +28,32 @@ with open('data/brick_rp_distances.csv', mode='r') as file:
 print(distances)
 for j in range(1,23):
     ligne=[]
-    for i in range(1,4):
+    for i in range(1,5):
         ligne.append(solver.NumVar(0, 1, f'b{j}a{i}'))
     matrice.append(ligne)
 
+# Contrainte d'appartenance
+for brick in matrice :
+    somme = 0
+    for agent in brick:
+        somme += agent
+    solver.Add(somme == 1) # Un seul agent par brick
 
-for i in matrice :
-    somme=0
-    for j in i :
-        somme=somme+j
-    solver.Add(somme == 1)
-
-# contrainte charge de travail
+# Contrainte charge de travail
 for i in range(3):
     somme=0
     for j in range(22):
         somme+=matrice[j][i]
     solver.Add(0.8 <= somme <= 1.2)
+
+# Minimiser les distances agent-brick
+for i in matrice:
+    somme = 0
+    for j in i:
+        somme += matrice[j][i]*float(distances[j][i])
+    solver.Minimize(somme)
+    
+
     
     
 
