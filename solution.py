@@ -1,106 +1,90 @@
 from ortools.linear_solver import pywraplp
 import csv
-# Crée un solveur linéaire avec le backend CBC (open-source solver)
+import sys
+
+# Create the linear solver with the GLOP backend.
 solver = pywraplp.Solver.CreateSolver('GLOP')
+if not solver:
+    print("Could not create solver GLOP")
+    sys.exit()
 
-matrice = []
-matriceprime = [
-    [0, 0, 0, 1],  
-    [0, 0, 0, 1],  
-    [0, 0, 0, 1],  
-    [1, 0, 0, 0],  
-    [1, 0, 0, 0],  
-    [1, 0, 0, 0],  
-    [1, 0, 0, 0],  
-    [1, 0, 0, 0], 
-    [0, 0, 1, 0],  
-    [0, 1, 0, 0],  
-    [0, 1, 0, 0],  
-    [0, 1, 0, 0],  
-    [0, 1, 0, 0], 
-    [0, 1, 0, 0],  
-    [1, 0, 0, 0],  
-    [0, 0, 1, 0],  
-    [0, 0, 1, 0],  
-    [0, 0, 1, 0],  
-    [0, 0, 0, 1], 
-    [0, 0, 0, 1],  
-    [0, 0, 0, 1],  
-    [0, 0, 0, 1],  
-    [0, 0, 0, 1],  
-]
-distances = []
-index_values = []
+distances = [] # Distances brick/agent
+index_values = [] # Workloads
 
-# Lire le fichier CSV
+# Lecture des charges de travail des bricks
 with open('data/bricks_index_values.csv', mode='r') as file:
     csv_reader = csv.reader(file)
-    next(csv_reader)  # Sauter l'en-tête si le fichier en a un
+    next(csv_reader)  # Sauter l'en-tête
     
     for row in csv_reader:
-        # Ajouter la valeur float (index_value) dans la liste
-        index_values.append(float(row[1]))
+        index_values.append(float(row[1]))  # Ajouter la valeur float (index_value) dans la liste
 
-# Lire le fichier CSV
+# Lecture des distances brick/agent
 with open('data/brick_rp_distances.csv', mode='r') as file:
     csv_reader = csv.reader(file)
-    next(csv_reader)  # Sauter l'en-tête si le fichier en a un
+    next(csv_reader)  # Sauter l'en-tête
     
     for row in csv_reader:
-        # Ajouter la valeur float (index_value) dans la liste
-        distances.append(row[1:])
+        distances.append(list(map(float, row[1:])))  # Convertir chaque distance en float
 
+num_bricks = len(index_values)
+num_agents = len(distances[0])
 
-for j in range(1,23):
-    ligne=[]
-    for i in range(1,5):
-        ligne.append(solver.NumVar(0, 1, f'b{j}a{i}'))
-    matrice.append(ligne)
+# Initial matrix brick/agent
+associations = [3, 3, 3, 0, 0, 0, 0, 0, 2, 1, 1, 1, 1, 1, 0, 2, 2, 2, 3, 3, 3, 3]
+initial_matrix = []
+for agent in associations:
+    agent_list = [0] * num_agents
+    agent_list[agent] = 1
+    initial_matrix.append(agent_list)
+
+# New matrix to compute with solver
+matrix = []
+
+# Remplissage de la matrice brick/agent
+for j in range(num_bricks):
+    row = []
+    for i in range(num_agents):
+        row.append(solver.NumVar(0, 1, f'b{j}a{i}')) # Ajouter brick_j_agent_i
+    matrix.append(row)
 
 # Contrainte d'appartenance
-for brick in matrice :
-    somme = 0
-    for agent in brick:
-        somme += agent
-    solver.Add(somme == 1) # Un seul agent par brick
+for j in range(num_bricks):
+    sum_brick = solver.Sum(matrix[j][i] for i in range(num_agents))
+    solver.Add(sum_brick == 1) # Un seul agent par brick
 
 # Contrainte charge de travail
-somme=0
-for i in range(4):
+for i in range(num_agents):
+    sum_workloads = solver.Sum(matrix[j][i] * index_values[j] for j in range(num_bricks))
+    solver.Add(0.8 <= sum_workloads <= 1.2) # Charge de travail entre 80% et 120% pour chaque agent
 
-    somme += solver.Sum(matrice[j][i] for i in range(4))
-    solver.Add(0.8 <= somme <= 1.2)
+# Contrainte des Center bricks
+solver.Add(matrix[3][0] == 1)
+solver.Add(matrix[13][1] == 1)
+solver.Add(matrix[15][2] == 1)
+solver.Add(matrix[21][3] == 1)
 
-solver.Add(matrice[3][0]==1)
-solver.Add(matrice[13][1]==1)
-solver.Add(matrice[15][2]==1)
-solver.Add(matrice[21][3]==1)
-# Minimiser les distances agent-brick
-somme=0.0
-print(matrice[1][1].solution_value())
-for i in range(4):
-    for j in range(22):
-        print(distances[j][i])
-        somme += float(matrice[j][i].solution_value())*float(distances[j][i])
+sum_distances = solver.Sum(matrix[j][i] * distances[j][i] for j in range(num_bricks) for i in range(num_agents))
+solver.Minimize(sum_distances)
 
-
-solver.Minimize(somme)
-# somme=0
-# for i in range(3):
-#     for j in range(22):
-#         somme += matrice[j][i].solution_value() - (2*matrice[j][i].solution_value()*matriceprime[j][i]) + (matriceprime[j][i]**2)
-        
+# somme = 0
+# for i in range(num_agents):
+#     for j in range(num_bricks):
+#         somme += matrice[j][i].solution_value() - (2*matrice[j][i].solution_value()*matriceprime[j][i]) + (matriceprime[j][i]**2) 
 # solver.Minimize(somme)
 
 
+#---------------------------------------------------------------------------
+# Resolve
 status = solver.Solve()
 
 if status == pywraplp.Solver.OPTIMAL:
-    print('Solution:')
-    for i in matrice :
-            for j in i :
-                print(f'{j} =', j.solution_value())
-    print('Objective value =', solver.Objective().Value())
+    print('Solution optimale trouvée:')
+    for j in range(num_bricks):
+        for i in range(num_agents):
+            if matrix[j][i].solution_value() == 1:
+                print(f'Brique {j+1} attribuée à l\'agent {i+1}')
+    print('Valeur objective =', solver.Objective().Value())
 else:
     print('Le solveur n\'a pas trouvé de solution optimale.')
 
