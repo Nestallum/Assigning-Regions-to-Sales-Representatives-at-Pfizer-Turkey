@@ -2,8 +2,8 @@ from ortools.linear_solver import pywraplp
 import csv
 import sys
 
-# Create the linear solver with the GLOP backend.
-solver = pywraplp.Solver.CreateSolver('GLOP')
+# Create the linear solver with the CBC backend (MILP).
+solver = pywraplp.Solver.CreateSolver('CBC')
 if not solver:
     print("Could not create solver GLOP")
     sys.exit()
@@ -45,8 +45,7 @@ matrix = []
 for j in range(num_bricks):
     row = []
     for i in range(num_agents):
-        row.append(solver.BoolVar(f'b{j}a{i}'))  # Ajouter brick_j_agent_i (Utilise BoolVar pour des variables binaires)
-        # row.append(solver.NumVar(0, 1, f'b{j}a{i}')) 
+        row.append(solver.IntVar(0, 1, f'b{j}a{i}'))  # Ajouter brick_j_agent_i
     matrix.append(row)
 
 # Contrainte des Center bricks
@@ -66,7 +65,6 @@ for i in range(num_agents):
 
 # Minimiser les distances
 sum_distances = solver.Sum(matrix[j][i] * distances[j][i] for j in range(num_bricks) for i in range(num_agents))
-# solver.Minimize(sum_distances)
 
 # Minimiser la disruption avec la matrice initiale
 sum_disruption = solver.Sum(
