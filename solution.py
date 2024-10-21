@@ -5,7 +5,7 @@ import sys
 # Create the linear solver with the CBC backend (MILP).
 solver = pywraplp.Solver.CreateSolver('CBC')
 if not solver:
-    print("Could not create solver GLOP")
+    print("Could not create solver CBC")
     sys.exit()
 
 distances = [] # Distances brick/agent
