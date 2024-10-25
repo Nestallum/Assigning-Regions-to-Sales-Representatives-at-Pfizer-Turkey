@@ -65,14 +65,12 @@ for i in range(num_agents):
 
 # Minimiser les distances
 sum_distances = solver.Sum(matrix[j][i] * distances[j][i] for j in range(num_bricks) for i in range(num_agents))
+solver.Minimize(sum_distances)
 
 # Minimiser la disruption avec la matrice initiale
 sum_disruption = solver.Sum(
     matrix[j][i] - (2*matrix[j][i]*initial_matrix[j][i]) + initial_matrix[j][i] for j in range(num_bricks) for i in range(num_agents)
 )
-
-# Minimiser la somme des disruptions et des distances
-solver.Minimize(sum_disruption + sum_distances)
 
 #---------------------------------------------------------------------------
 # Resolve
@@ -84,8 +82,8 @@ if status == pywraplp.Solver.OPTIMAL:
         for i in range(num_agents):
             if matrix[j][i].solution_value() == 1:
                 print(f'Brique {j+1} attribuée à l\'agent {i+1}')
-            else:
-                print(f'Brique {j+1} : {matrix[j][i].solution_value()}')
+            # else:
+            #     print(f'Brique {j+1} : {matrix[j][i].solution_value()}')
     print('Valeur objective =', solver.Objective().Value())
 else:
     print('Le solveur n\'a pas trouvé de solution optimale.')
