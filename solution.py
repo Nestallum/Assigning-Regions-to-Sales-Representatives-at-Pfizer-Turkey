@@ -1,11 +1,12 @@
 from ortools.linear_solver import pywraplp
 import csv
 import sys
+import math
 
 distances = [] # Distances brick/agent
 index_values = [] # Workloads
 
-    # Lecture des charges de travail des bricks
+# Lecture des charges de travail des bricks
 with open('data/bricks_index_values.csv', mode='r') as file:
     csv_reader = csv.reader(file)
     next(csv_reader)  # Sauter l'en-tête
@@ -13,7 +14,7 @@ with open('data/bricks_index_values.csv', mode='r') as file:
     for row in csv_reader:
             index_values.append(float(row[1]))  # Ajouter la valeur float (index_value) dans la liste
 
-    # Lecture des distances brick/agent
+# Lecture des distances brick/agent
 with open('data/brick_rp_distances.csv', mode='r') as file:
     csv_reader = csv.reader(file)
     next(csv_reader)  # Sauter l'en-tête
@@ -24,21 +25,21 @@ with open('data/brick_rp_distances.csv', mode='r') as file:
 num_bricks = len(index_values)
 num_agents = len(distances[0])
 
-    # Initial matrix brick/agent
+# Initial matrix brick/agent
 associations = [3, 3, 3, 0, 0, 0, 0, 0, 2, 1, 1, 1, 1, 1, 0, 2, 2, 2, 3, 3, 3, 3]
 initial_matrix = []
 for agent in associations:
-        agent_list = [0] * num_agents
-        agent_list[agent] = 1
-        initial_matrix.append(agent_list)
+    agent_list = [0] * num_agents
+    agent_list[agent] = 1
+    initial_matrix.append(agent_list)
         
-def Solver(index_values,distances,contraint_disruption,initial_matrix) :
+def Solver(upper_bound_disruption) :
+
     # Create the linear solver with the CBC backend (MILP).
     solver = pywraplp.Solver.CreateSolver('CBC')
     if not solver:
         print("Could not create solver CBC")
         sys.exit()
-
 
     # New matrix to compute with solver
     matrix = []
@@ -65,57 +66,57 @@ def Solver(index_values,distances,contraint_disruption,initial_matrix) :
         sum_workloads = solver.Sum(matrix[j][i] * index_values[j] for j in range(num_bricks))
         solver.Add(sum_workloads >= 0.8)  # Limite inférieure
         solver.Add(sum_workloads <= 1.2)  # Limite supérieure
-        
-    # Minimiser la disruption avec la matrice initiale
-    sum_disruption = solver.Sum(
-        matrix[j][i] - (2*matrix[j][i]*initial_matrix[j][i]) + initial_matrix[j][i] for j in range(num_bricks) for i in range(num_agents)
-    )
-    solver.Add(sum_disruption<=contraint_disruption-0.001)
     
     # Minimiser les distances
     sum_distances = solver.Sum(matrix[j][i] * distances[j][i] for j in range(num_bricks) for i in range(num_agents))
     solver.Minimize(sum_distances)
 
-    
+    # Minimiser par contrainte la disruption avec la matrice initiale
+    disruption = solver.Sum(
+        matrix[j][i] - (2*matrix[j][i]*initial_matrix[j][i]) + initial_matrix[j][i] for j in range(num_bricks) for i in range(num_agents)
+    )
+    solver.Add(disruption <= upper_bound_disruption - 0.001) # Trouver la nouvelle meilleure disruption
+
     #---------------------------------------------------------------------------
     # Resolve
     status = solver.Solve()
 
     if status == pywraplp.Solver.OPTIMAL:
+        # Affichage d'une solution avec association brick-agent et valeur objective
         # print('Solution optimale trouvée:')
         # for j in range(num_bricks):
         #     for i in range(num_agents):
         #         if matrix[j][i].solution_value() == 1:
         #             print(f'Brique {j+1} attribuée à l\'agent {i+1}')
-        # for i in range(num_agents):
-        #     print(f"Workloads agent {i+1} : {sum(matrix[j][i].solution_value() * index_values[j] for j in range(num_bricks)) * 100:.2f}%")
         # print('Valeur objective =', solver.Objective().Value())
-        sum_disruption = solver.Sum(
-        matrix[j][i] - (2*matrix[j][i].solution_value()*initial_matrix[j][i]) + initial_matrix[j][i] for j in range(num_bricks) for i in range(num_agents)
-        )
-        
-        return solver.Objective().Value(),sum_disruption.solution_value(),True
+        return solver.Objective().Value(), disruption.solution_value(), True
     else:
-        print('Le solveur n\'a pas trouvé de solution optimale.')
-        return 0,0,False
+        # print('Le solveur n\'a pas trouvé de solution optimale.')
+        return 0, 0, False
         
+def find_non_dominated_solutions(): 
+    non_dominated_solutions = []
 
-def Algorithm_alpha(index_values,distances,initial_matrix) : 
-    print("ok")
-    perfect_point=[]
-    distance,disruption,boolean = Solver(index_values,distances,15,initial_matrix) 
-    perfect_point.append([distance,disruption])
+    sum_distances, disruption, solution_found = Solver(math.inf) 
+    non_dominated_solutions.append([sum_distances, disruption])
     
-    
-    while(boolean):
-        distance,disruption,boolean = Solver(index_values,distances,disruption,initial_matrix)
-        perfect_point.append([distance,disruption])
+    while(solution_found): # Calcul des autres solutions non dominées avec une disruption plus faible
+        sum_distances, disruption, solution_found = Solver(disruption)
+        if(solution_found == False):
+            break
+        non_dominated_solutions.append([sum_distances, disruption])
         
-    
-    return perfect_point[:-1]
+    return non_dominated_solutions
 
-print(Algorithm_alpha(index_values,distances,initial_matrix))
-print(len(Algorithm_alpha(index_values,distances,initial_matrix)))
+# Affichage des solutions
+non_dominated_solutions = find_non_dominated_solutions()
+print(f"Number of non dominated solutions : {len(non_dominated_solutions)}")
+print(f"Non dominated solutions [sum_distances, disruption] :")
+for i in range(len(non_dominated_solutions)):
+    sum_distance, disruption = non_dominated_solutions[i]
+    print(f"    - Solution {i+1}: {sum_distance}, {disruption}")
+
+
     
     
 
