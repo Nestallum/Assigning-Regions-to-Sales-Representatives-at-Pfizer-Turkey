@@ -83,11 +83,9 @@ if status == pywraplp.Solver.OPTIMAL:
         for i in range(num_agents):
             if matrix[j][i].solution_value() == 1:
                 print(f'Brique {j+1} attribuée à l\'agent {i+1}')
-            # else:
-            #     print(f'Brique {j+1} : {matrix[j][i].solution_value()}')
-    print('Valeur objective =', solver.Objective().Value())
     for i in range(num_agents):
-        print(f"Workloads agent {i+1} : {sum(matrix[j][i].solution_value() * index_values[j] for j in range(num_bricks))}")
+        print(f"Workloads agent {i+1} : {sum(matrix[j][i].solution_value() * index_values[j] for j in range(num_bricks)) * 100:.2f}%")
+    print('Valeur objective =', solver.Objective().Value())
 else:
     print('Le solveur n\'a pas trouvé de solution optimale.')
 
