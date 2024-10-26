@@ -61,7 +61,8 @@ for j in range(num_bricks):
 # Contrainte charge de travail
 for i in range(num_agents):
     sum_workloads = solver.Sum(matrix[j][i] * index_values[j] for j in range(num_bricks))
-    solver.Add(0.8 <= sum_workloads <= 1.2) # Charge de travail entre 80% et 120% pour chaque agent
+    solver.Add(sum_workloads >= 0.8)  # Limite inférieure
+    solver.Add(sum_workloads <= 1.2)  # Limite supérieure
 
 # Minimiser les distances
 sum_distances = solver.Sum(matrix[j][i] * distances[j][i] for j in range(num_bricks) for i in range(num_agents))
@@ -85,6 +86,8 @@ if status == pywraplp.Solver.OPTIMAL:
             # else:
             #     print(f'Brique {j+1} : {matrix[j][i].solution_value()}')
     print('Valeur objective =', solver.Objective().Value())
+    for i in range(num_agents):
+        print(f"Workloads agent {i+1} : {sum(matrix[j][i].solution_value() * index_values[j] for j in range(num_bricks))}")
 else:
     print('Le solveur n\'a pas trouvé de solution optimale.')
 
