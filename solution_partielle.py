@@ -4,6 +4,7 @@ import csv
 import sys
 import math
 
+
 distances = [] # Distances brick/agent
 index_values = [] # Workloads
 
@@ -37,9 +38,9 @@ for agent in associations:
 def Solver(upper_bound_disruption) :
 
     # Create the linear solver with the CBC backend (MILP).
-    solver = pywraplp.Solver.CreateSolver('CBC')
+    solver = pywraplp.Solver.CreateSolver('GLOP')
     if not solver:
-        print("Could not create solver CBC")
+        print("Could not create solver GLOP")
         sys.exit()
 
     # New matrix to compute with solver
@@ -65,11 +66,9 @@ def Solver(upper_bound_disruption) :
     # Contrainte charge de travail
     for i in range(num_agents):
         sum_workloads = solver.Sum(matrix[j][i] * index_values[j] for j in range(num_bricks))
-        # solver.Add(sum_workloads >= 0.8)  # Limite inférieure Question 1 
-        # solver.Add(sum_workloads <= 1.2)  # Limite supérieure Question 1
-        solver.Add(sum_workloads >= 0.9)  # Limite inférieure Question 1 
-        solver.Add(sum_workloads <= 1.1)
-        
+        solver.Add(sum_workloads >= 0.8)  # Limite inférieure Question 1 
+        solver.Add(sum_workloads <= 1.2)  # Limite supérieure Question 1
+         
     # Minimiser les distances
     sum_distances = solver.Sum(matrix[j][i] * distances[j][i] for j in range(num_bricks) for i in range(num_agents))
     
@@ -96,7 +95,7 @@ def Solver(upper_bound_disruption) :
     else:
         # print('Le solveur n\'a pas trouvé de solution optimale.')
         return 0, 0, False
-        
+
 def find_non_dominated_solutions(): 
     non_dominated_solutions = []
 
@@ -115,40 +114,3 @@ print(f"Non dominated solutions [sum_distances, disruption] :")
 for i in range(len(non_dominated_solutions)):
     sum_distance, disruption = non_dominated_solutions[i]
     print(f"    - Solution {i+1}: {sum_distance}, {disruption}")
-
-def plot_graph_distance_disruption():
-    
-    # Sépare les points en deux listes : une pour les distances (x) et une pour les disruptions (y)
-    distances = [point[0] for point in non_dominated_solutions]
-    disruptions = [point[1] for point in non_dominated_solutions]
-
-    # Création du graphique
-    plt.figure(figsize=(8, 6))
-    plt.scatter(distances, disruptions, color='blue', marker='o', label='Points (distance, disruption)')
-
-    # Ajout des labels et d'un titre
-    plt.xlabel('Distance')
-    plt.ylabel('Disruption')
-    plt.title('Graphique Distance vs Disruption')
-    plt.legend()
-
-    # Affichage du graphique
-    plt.grid(True)
-    plt.show()
-    
-    
-def print_initial_solution() :
-    
-    print("Initial solution : ")
-    for i in range(num_agents):
-        sum_workloads = sum(initial_matrix[j][i] * index_values[j] for j in range(num_bricks))
-        print(f"    - Agent {i+1} = {sum_workloads}")
-    
-    print(f"Distance : {sum(initial_matrix[j][i] * distances[j][i] for j in range(num_bricks) for i in range(num_agents))}")
-   
-        
-print_initial_solution()   
-    
-    
-
-
