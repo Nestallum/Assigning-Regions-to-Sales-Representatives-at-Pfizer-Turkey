@@ -98,13 +98,10 @@ def find_non_dominated_solutions():
     non_dominated_solutions = []
 
     sum_distances, disruption, solution_found = Solver(math.inf) 
-    non_dominated_solutions.append([sum_distances, disruption])
     
     while(solution_found): # Calcul des autres solutions non dominées avec une disruption plus faible
-        sum_distances, disruption, solution_found = Solver(disruption)
-        if(solution_found == False):
-            break
         non_dominated_solutions.append([sum_distances, disruption])
+        sum_distances, disruption, solution_found = Solver(disruption)
         
     return non_dominated_solutions
 
