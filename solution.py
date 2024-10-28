@@ -67,8 +67,8 @@ def Solver(upper_bound_disruption) :
         sum_workloads = solver.Sum(matrix[j][i] * index_values[j] for j in range(num_bricks))
         # solver.Add(sum_workloads >= 0.8)  # Limite inférieure Question 1 
         # solver.Add(sum_workloads <= 1.2)  # Limite supérieure Question 1
-        solver.Add(sum_workloads >= 0.9)  # Limite inférieure Question 1 
-        solver.Add(sum_workloads <= 1.1)
+        solver.Add(sum_workloads >= 0.8)  # Limite inférieur Question 3
+        solver.Add(sum_workloads <= 1.2) # Limite inférieur Question 3
         
     # Minimiser les distances
     sum_distances = solver.Sum(matrix[j][i] * distances[j][i] for j in range(num_bricks) for i in range(num_agents))
@@ -115,6 +115,7 @@ print(f"Non dominated solutions [sum_distances, disruption] :")
 for i in range(len(non_dominated_solutions)):
     sum_distance, disruption = non_dominated_solutions[i]
     print(f"    - Solution {i+1}: {sum_distance}, {disruption}")
+print(f"Best minimized distance : {non_dominated_solutions[0][0]}")
 
 def plot_graph_distance_disruption():
     
