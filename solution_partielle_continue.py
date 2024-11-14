@@ -1,9 +1,10 @@
 from ortools.linear_solver import pywraplp
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import numpy as np
 import csv
 import sys
 import math
-
 
 distances = [] # Distances brick/agent
 index_values = [] # Workloads
@@ -11,7 +12,7 @@ index_values = [] # Workloads
 # Lecture des charges de travail des bricks
 with open('data/bricks_index_values.csv', mode='r') as file:
     csv_reader = csv.reader(file)
-    next(csv_reader)  # Sauter l'en-tête
+    next(csv_reader)
         
     for row in csv_reader:
             index_values.append(float(row[1]))  # Ajouter la valeur float (index_value) dans la liste
@@ -19,7 +20,7 @@ with open('data/bricks_index_values.csv', mode='r') as file:
 # Lecture des distances brick/agent
 with open('data/brick_rp_distances.csv', mode='r') as file:
     csv_reader = csv.reader(file)
-    next(csv_reader)  # Sauter l'en-tête
+    next(csv_reader)
         
     for row in csv_reader:
         distances.append(list(map(float, row[1:])))  # Convertir chaque distance en float
@@ -37,20 +38,20 @@ for agent in associations:
         
 def Solver(upper_bound_disruption) :
 
-    # Create the linear solver with the CBC backend (MILP).
-    solver = pywraplp.Solver.CreateSolver('GLOP')
+    # CBC backend solver (MILP).
+    solver = pywraplp.Solver.CreateSolver('CBC')
     if not solver:
-        print("Could not create solver GLOP")
+        print("Could not create solver CBC")
         sys.exit()
 
-    # New matrix to compute with solver
+    # Matrice de variables continues pour allocation partielle et steps
     matrix = []
 
     # Remplissage de la matrice brick/agent
     for j in range(num_bricks):
         row = []
         for i in range(num_agents):
-            row.append(solver.IntVar(0, 1, f'b{j}a{i}'))  # Ajouter brick_j_agent_i
+            row.append(solver.NumVar(0, 1, f'b{j}a{i}'))  # Ajouter brick_j_agent_i
         matrix.append(row)
 
     # Contrainte des Center bricks
@@ -66,21 +67,32 @@ def Solver(upper_bound_disruption) :
     # Contrainte charge de travail
     for i in range(num_agents):
         sum_workloads = solver.Sum(matrix[j][i] * index_values[j] for j in range(num_bricks))
-        solver.Add(sum_workloads >= 0.8)  # Limite inférieure Question 1 
-        solver.Add(sum_workloads <= 1.2)  # Limite supérieure Question 1
-         
+        solver.Add(sum_workloads >= 0.8)
+        solver.Add(sum_workloads <= 1.2)
+        
     # Minimiser les distances
     sum_distances = solver.Sum(matrix[j][i] * distances[j][i] for j in range(num_bricks) for i in range(num_agents))
     
-    # Minimiser par contrainte la disruption avec la matrice initiale
-    disruption = solver.Sum(
-        matrix[j][i] - (2*matrix[j][i]*initial_matrix[j][i]) + initial_matrix[j][i] for j in range(num_bricks) for i in range(num_agents)
-    )
+   # Variables pour la valeur absolue
+    disruption_vars = []
+    for j in range(num_bricks):
+        for i in range(num_agents):
+            # Variable pour la valeur absolue de la différence
+            abs_diff = solver.NumVar(0, solver.infinity(), f'abs_diff_{j}_{i}')
+            
+            # Ajout de contraintes linéaires pour modéliser la valeur absolue
+            solver.Add(abs_diff >= matrix[j][i] - initial_matrix[j][i])   # ax + b - yi
+            solver.Add(abs_diff >= -(matrix[j][i] - initial_matrix[j][i]))  # -(ax + b - yi)
+            
+            disruption_vars.append(abs_diff)
+
+    # Fonction objectif avec somme des disruptions absolues
+    disruption = solver.Sum(disruption_vars)
     solver.Add(disruption <= upper_bound_disruption - 0.001) # Trouver la nouvelle meilleure disruption
 
     solver.Minimize(sum_distances+(disruption*0.001)) # Ajout d'un petit epsilon sur la disruption pour choisir la valeur non dominée en cas d'égalité
     #---------------------------------------------------------------------------
-    # Resolve
+
     status = solver.Solve()
 
     if status == pywraplp.Solver.OPTIMAL:
@@ -95,7 +107,7 @@ def Solver(upper_bound_disruption) :
     else:
         # print('Le solveur n\'a pas trouvé de solution optimale.')
         return 0, 0, False
-
+        
 def find_non_dominated_solutions(): 
     non_dominated_solutions = []
 
@@ -107,10 +119,45 @@ def find_non_dominated_solutions():
         
     return non_dominated_solutions
 
-# Affichage des solutions
-non_dominated_solutions = find_non_dominated_solutions()
-print(f"Number of non dominated solutions : {len(non_dominated_solutions)}")
-print(f"Non dominated solutions [sum_distances, disruption] :")
-for i in range(len(non_dominated_solutions)):
-    sum_distance, disruption = non_dominated_solutions[i]
-    print(f"    - Solution {i+1}: {sum_distance}, {disruption}")
+def plot_graph_distance_disruption(non_dominated_solutions):
+    # Séparation des distances et disruptions
+    solutions_to_plot = non_dominated_solutions[0::1000] # 1 solution par pas de 1000
+    distances = [point[0] for point in solutions_to_plot]
+    disruptions = [point[1] for point in solutions_to_plot]
+
+    plt.figure(figsize=(8, 6))
+
+    colors = cm.rainbow(np.linspace(0, 1, len(solutions_to_plot)))
+
+    for i, (x, y) in enumerate(zip(distances, disruptions)):
+        plt.scatter(x, y, color=colors[i], marker='o', label=f'Solution {i + 1}')
+        plt.text(x, y, f'S{i + 1}', fontsize=9, ha='right', va='bottom')
+
+    plt.xlabel('Distance')
+    plt.ylabel('Disruption')
+    plt.title(f'Graphique Distance vs Disruption (Une solution tous les 1000 pas, sur {len(non_dominated_solutions)} solutions)')
+    plt.legend(loc='upper right')
+
+    plt.grid(True)
+    plt.show()
+   
+def main():
+    # Recherche et affichage des solutions non dominées
+    print("Recherche de solutions avec allocation partielle continue...") # laisser tourner l'algorithme, un peu long...
+    non_dominated_solutions = find_non_dominated_solutions()
+    
+    print(f"Number of non-dominated solutions: {len(non_dominated_solutions)}")
+
+    # Affichage des solutions
+    # print(f"Non-dominated solutions [sum_distances, disruption]:")
+    # for i, (sum_distance, disruption) in enumerate(non_dominated_solutions):
+    #     print(f"    - Solution {i + 1}: {sum_distance}, {disruption}")
+    
+    plot_graph_distance_disruption(non_dominated_solutions)
+
+if __name__ == "__main__":
+    main()
+
+    
+
+
